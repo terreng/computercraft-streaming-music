@@ -14,7 +14,7 @@ The ComputerCraft program connects to a web server to download the music files. 
 1. Download this repository to your computer into a folder.
 2. Sign up for Firebase and make a new project at [https://firebase.google.com/](https://firebase.google.com/).
 3. You **must** enable billing for the project in order for it to work. This is due to restrictions Google has in place to prevent abuse. Upgrade to the Blaze plan, which still includes the no-cost usage of the free plan. This should be plenty of usage for most people, so you shouldn't expect to pay anything. Just in case, consider setting up a [budget alert](https://firebase.google.com/docs/projects/billing/avoid-surprise-bills).
-4. Install Node.js version 20 or later from [https://nodejs.org/en/download/](https://nodejs.org/en/download/).
+4. Install Node.js version 20 from [https://nodejs.org/en/download/](https://nodejs.org/en/download/).
 5. In your terminal, run `npm install -g firebase-tools` to install Firebase.
 6. In your terminal, navigate inside the project folder. Run `firebase login` and follow the steps.
 7. Run `firebase init functions` and follow the steps. Choose JavaScript. Don't choose to overwrite the `functions/index.js` file. Install the dependencies when prompted.
