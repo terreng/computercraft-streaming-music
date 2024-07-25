@@ -1,5 +1,9 @@
 # Streaming music in Minecraft (ComputerCraft CC: Tweaked mod)
 
+**Install:** `pastebin get manTdeiG music`
+
+**Run:** `music`
+
 ## How to use
 
 1. Install the [CC: Tweaked](https://tweaked.cc/) mod to your world/server.
