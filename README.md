@@ -20,7 +20,7 @@ The ComputerCraft program connects to a web server to download the music files. 
 3. Install Node.js version 20 from [https://nodejs.org/en/download/](https://nodejs.org/en/download/).
 4. In your terminal, run `npm install -g firebase-tools` to install Firebase.
 5. In your terminal, navigate inside the project folder. Run `firebase login` and follow the steps.
-6. Run `firebase init functions` and follow the steps. Choose JavaScript. Don't choose to overwrite the `functions/index.js` file. Install the dependencies when prompted.
+6. Run `firebase init functions` and follow the steps. Choose JavaScript. Don't choose to overwrite the `functions/index.js` or `functions/package.json` files when it asks you. Install the dependencies when prompted.
 7. Run `cd functions` to go inside the `functions` directory and then run `npm install` to install more dependencies.
 8. Run `cd ..` to go back and then run `firebase deploy` to deploy your new Cloud Function.
 9. After the deployment is complete it will give you the Function URL. Copy that URL into the first line of `music.lua`.
