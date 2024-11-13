@@ -19,13 +19,12 @@ export const ipod = onRequest((req, res) => {
         return new Promise(function (resolve, reject) {
 
             // Download the audio using the cobalt.tools API. Documentation: https://github.com/imputnet/cobalt/blob/current/docs/api.md
-            fetch('https://api.cobalt.tools/api/json', {
+            fetch('https://c.blahaj.ca/', {
                 method: 'POST',
                 body: JSON.stringify({
                     url: 'https://www.youtube.com/watch?v=' + req.query.id,
-                    isAudioOnly: true,
-                    vQuality: '144',
-                    aFormat: 'opus'
+                    downloadMode: 'audio',
+                    audioFormat: 'opus'
                 }),
                 headers: {
                     'Content-Type': 'application/json',
