@@ -10,7 +10,7 @@ import dfpwm from "dfpwm";
 const ytmusic = new YTMusic()
 await ytmusic.initialize()
 
-export const ipod = onRequest((req, res) => {
+export const ipod = onRequest({ memory: "512MB" }, (req, res) => {
 
     if (req.query.id) {
 
@@ -90,7 +90,7 @@ export const ipod = onRequest((req, res) => {
             // If you paste in a youtube link into the search box, get the video id and look it up directly
 
             let youtube_url_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/);
-            if (youtube_url_match?.[5]) {
+            if (youtube_url_match?.[5]?.length == 11) {
 
                 ytmusic.getVideo(youtube_url_match[5]).then(function (result) {
                     resolve(res.status(200).send(JSON.stringify([{
