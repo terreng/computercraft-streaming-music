@@ -10,7 +10,7 @@ import dfpwm from "dfpwm";
 const ytmusic = new YTMusic()
 await ytmusic.initialize()
 
-export const ipod = onRequest({ memory: "512MB" }, (req, res) => {
+export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) => {
 
     if (req.query.id) {
 
