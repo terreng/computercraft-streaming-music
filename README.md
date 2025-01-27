@@ -13,6 +13,11 @@
 
 ## How to self-host
 
+> [!IMPORTANT]  
+> The YouTube downloading code in `functions/index.js` no longer works. If you want to self-host this, you'll first need to find an unofficial API to download YouTube videos and update the code. It won't work as-is.
+>
+> Self-hosting is not required to use this program. Simply use the pastebin command above which does work at the time of writing.
+
 The ComputerCraft program connects to a web server to download the music files. This server is hosted with Firebase Cloud Functions.
 
 1. Download this repository to your computer into a folder.
