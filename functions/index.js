@@ -5,7 +5,6 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import prism from "prism-media";
-import dfpwm from "dfpwm";
 
 const ytmusic = new YTMusic()
 await ytmusic.initialize()
@@ -35,12 +34,12 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                 .then(function (json) {
                     if (json.url) {
 
-                        // Transcode the audio from opus to s8. This reduces the file size and gets it ready for the dfpwm encoder.
+                        // Transcode the audio from opus to dfpwm. This reduces the file size.
                         const transcoder = new prism.FFmpeg({
                             args: [
                                 '-analyzeduration', '0',
                                 '-loglevel', '0',
-                                '-f', 's8',
+                                '-f', 'dfpwm',
                                 '-ar', '48000',
                                 '-ac', '1'
                             ]
@@ -52,7 +51,6 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                             if (response.ok) {
                                 response.body
                                     .pipe(transcoder)
-                                    .pipe(new dfpwm.Encoder())
                                     .pipe(fs.createWriteStream(filepath))
                                     .on('finish', function () {
                                         resolve(res.status(200).send(fs.readFileSync(filepath)));
