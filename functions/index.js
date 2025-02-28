@@ -10,6 +10,8 @@ import dfpwm from "dfpwm";
 const ytmusic = new YTMusic()
 await ytmusic.initialize()
 
+const rapidapi_api_keys = ["YOUR API KEY HERE"];
+
 export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) => {
 
     if (req.query.id) {
@@ -119,15 +121,14 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
 
 function getYoutubeDownloadUrl(id) {
     let max_attempts = 3;
-    let api_keys = ["YOUR API KEY HERE"];
-    let which_key = Math.floor(Math.random() * api_keys.length);
+    let which_key = Math.floor(Math.random() * rapidapi_api_keys.length);
 
     return new Promise(function (resolve, reject) {
         function attempt(att) {
             fetch('https://yt-api.p.rapidapi.com/dl?id='+id+'&cgeo=US', {
                 method: 'GET',
                 headers: {
-                    'x-rapidapi-key': api_keys[(which_key + att - 1) % api_keys.length],
+                    'x-rapidapi-key': rapidapi_api_keys[(which_key + att - 1) % rapidapi_api_keys.length],
                     'x-rapidapi-host': 'yt-api.p.rapidapi.com'
                 }
             })
