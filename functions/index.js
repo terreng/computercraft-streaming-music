@@ -18,66 +18,47 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
 
         return new Promise(function (resolve, reject) {
 
-            // Download the audio using the cobalt.tools API. Documentation: https://github.com/imputnet/cobalt/blob/current/docs/api.md
-            fetch('https://c.blahaj.ca/', {
-                method: 'POST',
-                body: JSON.stringify({
-                    url: 'https://www.youtube.com/watch?v=' + req.query.id,
-                    downloadMode: 'audio',
-                    audioFormat: 'opus'
-                }),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-            })
-                .then(response => response.json())
-                .then(function (json) {
-                    if (json.url) {
+            getYoutubeDownloadUrl(req.query.id).then(function (url) {
 
-                        // Transcode the audio from opus to s8. This reduces the file size and gets it ready for the dfpwm encoder.
-                        const transcoder = new prism.FFmpeg({
-                            args: [
-                                '-analyzeduration', '0',
-                                '-loglevel', '0',
-                                '-f', 's8',
-                                '-ar', '48000',
-                                '-ac', '1'
-                            ]
-                        })
+                // Transcode the audio from opus to s8. This reduces the file size and gets it ready for the dfpwm encoder.
+                const transcoder = new prism.FFmpeg({
+                    args: [
+                        '-analyzeduration', '0',
+                        '-loglevel', '0',
+                        '-f', 's8',
+                        '-ar', '48000',
+                        '-ac', '1'
+                    ]
+                })
 
-                        const filepath = path.join(os.tmpdir(), 'output.dfpwm');
+                const filepath = path.join(os.tmpdir(), 'output.dfpwm');
 
-                        fetch(json.url, { method: 'GET' }).then(function (response) {
-                            if (response.ok) {
-                                response.body
-                                    .pipe(transcoder)
-                                    .pipe(new dfpwm.Encoder())
-                                    .pipe(fs.createWriteStream(filepath))
-                                    .on('finish', function () {
-                                        resolve(res.status(200).send(fs.readFileSync(filepath)));
-                                    })
-                                    .on('error', function (error) {
-                                        console.error(error)
-                                        reject(res.status(500).send("Error 500"));
-                                    })
-                            } else {
-                                console.log(response.status)
+                fetch(url, { method: 'GET' }).then(function (response) {
+                    if (response.ok) {
+                        response.body
+                            .pipe(transcoder)
+                            .pipe(new dfpwm.Encoder())
+                            .pipe(fs.createWriteStream(filepath))
+                            .on('finish', function () {
+                                resolve(res.status(200).send(fs.readFileSync(filepath)));
+                            })
+                            .on('error', function (error) {
+                                console.error(error)
                                 reject(res.status(500).send("Error 500"));
-                            }
-                        }).catch(function (error) {
-                            console.error(error)
-                            reject(res.status(500).send("Error 500"));
-                        });
-
+                            })
                     } else {
-                        console.log(json);
+                        console.log(response.status)
                         reject(res.status(500).send("Error 500"));
                     }
                 }).catch(function (error) {
-                    console.error(error);
+                    console.error(error)
                     reject(res.status(500).send("Error 500"));
                 });
+
+            }).catch(function (error) {
+                console.error(error);
+                reject(res.status(500).send("Error 500"));
+            });
 
         })
 
@@ -135,3 +116,42 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
         res.status(400).send("Bad request");
     }
 });
+
+function getYoutubeDownloadUrl(id) {
+    let max_attempts = 3;
+    let api_keys = ["YOUR API KEY HERE"];
+    let which_key = Math.floor(Math.random() * api_keys.length);
+
+    return new Promise(function (resolve, reject) {
+        function attempt(att) {
+            fetch('https://yt-api.p.rapidapi.com/dl?id='+id+'&cgeo=US', {
+                method: 'GET',
+                headers: {
+                    'x-rapidapi-key': api_keys[(which_key + att - 1) % api_keys.length],
+                    'x-rapidapi-host': 'yt-api.p.rapidapi.com'
+                }
+            })
+                .then(response => response.json())
+                .then(function (json) {
+                    let url = json?.formats?.[0]?.url;
+                    if (url) {
+                        resolve(url);
+                    } else {
+                        failed("No download url");
+                    }
+                }).catch(function (error) {
+                    console.error(error);
+                    failed(error);
+                });
+
+            function failed(error) {
+                if (att < max_attempts) {
+                    attempt(att + 1);
+                } else {
+                    reject(error);
+                }
+            }
+        }
+        attempt(1);
+    });
+}
