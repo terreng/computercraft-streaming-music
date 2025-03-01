@@ -33,7 +33,8 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                     ]
                 })
 
-                const filepath = path.join(os.tmpdir(), 'output.dfpwm');
+                const randomId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+                const filepath = path.join(os.tmpdir(), 'output-' + randomId + '.dfpwm');
 
                 fetch(url, { method: 'GET' }).then(function (response) {
                     if (response.ok) {
@@ -43,17 +44,21 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                             .pipe(fs.createWriteStream(filepath))
                             .on('finish', function () {
                                 resolve(res.status(200).send(fs.readFileSync(filepath)));
+                                fs.unlink(filepath, () => {});
                             })
                             .on('error', function (error) {
                                 console.error(error)
+                                fs.unlink(filepath, () => {});
                                 reject(res.status(500).send("Error 500"));
                             })
                     } else {
                         console.log(response.status)
+                        fs.unlink(filepath, () => {});
                         reject(res.status(500).send("Error 500"));
                     }
                 }).catch(function (error) {
                     console.error(error)
+                    fs.unlink(filepath, () => {});
                     reject(res.status(500).send("Error 500"));
                 });
 
