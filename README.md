@@ -6,7 +6,7 @@
 
 ## How to use
 
-1. Install the [CC: Tweaked](https://tweaked.cc/) mod to your world/server. Make sure you're using version 1.100.0 of the mod (Dec 2021) or newer, or it won't work.
+1. Install the [CC: Tweaked](https://tweaked.cc/) mod to your world/server. Make sure you're using version 1.100.0 of the mod (released December 2021) or newer, or it won't work.
 2. Craft an Advanced Computer and connect it to a speaker, or craft an Advanced Noisy Pocket Computer.
 3. Open the computer and then drag and drop the `music.lua` script on top of the Minecraft window to transfer the file over.
 4. Run the `music` command and enjoy your music!
