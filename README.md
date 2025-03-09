@@ -11,6 +11,10 @@
 3. Open the computer and then drag and drop the `music.lua` script on top of the Minecraft window to transfer the file over.
 4. Run the `music` command and enjoy your music!
 
+## Troubleshooting
+- "Module 'cc.audio.dfpwm' not found" error: Make sure you're using version 1.100.0 of the CC: Tweaked mod (released December 2021) or newer. New audio features were added in this version, so it won't work in 1.99.X or below.
+- "No speakers attached" when using an Advanced Noisy Pocket Computer: Restart your Minecraft server.
+
 ## How to self-host
 
 > [!IMPORTANT]  
