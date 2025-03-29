@@ -1,136 +1,124 @@
 import { onRequest } from "firebase-functions/v2/https";
-import YTMusic from "ytmusic-api"
 import fetch from "node-fetch";
-import os from "os";
-import path from "path";
-import fs from "fs";
-import prism from "prism-media";
-import dfpwm from "dfpwm";
-
-const ytmusic = new YTMusic()
-await ytmusic.initialize()
+import prism from 'prism-media';
 
 const rapidapi_api_keys = ["YOUR API KEY HERE"];
 
 export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) => {
 
-    if (req.query.id) {
+    return new Promise(function (resolve, reject) {
 
-        // Download youtube video and convert to dfpwm
+        if (req.query.id) {
 
-        return new Promise(function (resolve, reject) {
-
-            getYoutubeDownloadUrl(req.query.id).then(function (url) {
-
-                // Transcode the audio from opus to s8. This reduces the file size and gets it ready for the dfpwm encoder.
-                const transcoder = new prism.FFmpeg({
-                    args: [
-                        '-analyzeduration', '0',
-                        '-loglevel', '0',
-                        '-f', 's8',
-                        '-ar', '48000',
-                        '-ac', '1'
-                    ]
+            // Download youtube video and convert to dfpwm
+    
+            makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/dl?id='+req.query.id+'&cgeo=US').then(function (json) {
+                return new Promise(function (resolve, reject) {
+                    let url = json?.formats?.[0]?.url;
+                    if (url) {
+                        resolve(url);
+                    } else {
+                        reject(res.status(500).send("Error 500"));
+                    }
                 })
-
-                const randomId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
-                const filepath = path.join(os.tmpdir(), 'output-' + randomId + '.dfpwm');
-
+            }).then(function (url) {
+    
                 fetch(url, { method: 'GET' }).then(function (response) {
                     if (response.ok) {
+                        const transcoder = new prism.FFmpeg({
+                            args: [
+                                '-analyzeduration', '0',
+                                '-loglevel', '0',
+                                '-f', 'dfpwm',
+                                '-ar', '48000',
+                                '-ac', '1'
+                            ]
+                        });
+    
                         response.body
                             .pipe(transcoder)
-                            .pipe(new dfpwm.Encoder())
-                            .pipe(fs.createWriteStream(filepath))
-                            .on('finish', function () {
-                                resolve(res.status(200).send(fs.readFileSync(filepath)));
-                                fs.unlink(filepath, () => {});
-                            })
-                            .on('error', function (error) {
-                                console.error(error)
-                                fs.unlink(filepath, () => {});
-                                reject(res.status(500).send("Error 500"));
-                            })
+                            .pipe(res);
+    
+                        transcoder.on('end', function() {
+                            resolve();
+                        });
+    
+                        transcoder.on('error', function(err) {
+                            console.error('Transcoder error:', err);
+                            reject(res.status(500).send("Error 500"));
+                        });
                     } else {
-                        console.log(response.status)
-                        fs.unlink(filepath, () => {});
+                        console.log(response.status);
                         reject(res.status(500).send("Error 500"));
                     }
                 }).catch(function (error) {
-                    console.error(error)
-                    fs.unlink(filepath, () => {});
+                    console.error(error);
                     reject(res.status(500).send("Error 500"));
                 });
-
+    
             }).catch(function (error) {
                 console.error(error);
                 reject(res.status(500).send("Error 500"));
             });
-
-        })
-
-    } else if (req.query.search) {
-
-        // Search for songs on youtube
-
-        return new Promise(function (resolve, reject) {
-
+    
+        } else if (req.query.search) {
+    
             // If you paste in a youtube link into the search box, get the video id and look it up directly
-
+    
             let youtube_url_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/);
             if (youtube_url_match?.[5]?.length == 11) {
-
-                ytmusic.getVideo(youtube_url_match[5]).then(function (result) {
-                    resolve(res.status(200).send(JSON.stringify([{
-                        id: result.videoId,
-                        name: result.name,
-                        artist: result.artist.name,
-                        album: result.artist.name,
-                        duration: result.duration
+    
+                makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/video/info?id='+youtube_url_match[5]).then(function (item) {
+    
+                    resolve(res.status(200).send(JSON.stringify(item.error ? [] :[{
+                        id: item.videoId,
+                        name: replaceNonExtendedASCII(item.title),
+                        artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
                     }])));
+    
                 }).catch(function (error) {
                     console.error(error);
                     reject(res.status(500).send("Error 500"));
                 })
-
+    
             } else {
-
+    
                 // Otherwise, search for the song
-
-                ytmusic.search(req.query.search).then(function (result) {
-                    resolve(res.status(200).send(JSON.stringify(
-                        result
-                            .filter(a => ["SONG", "VIDEO"].includes(a.type))
-                            .map(function (a) {
-                                return {
-                                    id: a.videoId,
-                                    name: a.name,
-                                    artist: a.artist.name,
-                                    album: a.album?.name || a.artist.name,
-                                    duration: a.duration
-                                }
-                            }))));
+    
+                makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/search?query='+encodeURIComponent(req.query.search.split("+").join(" "))+'&type=video').then(function (json) {
+    
+                    resolve(res.status(200).send(JSON.stringify(json.data
+                        .filter(item => ["video"].includes(item.type))
+                        .map(function (item) {
+                            return {
+                                id: item.videoId,
+                                name: replaceNonExtendedASCII(item.title),
+                                artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
+                            }
+                    }))))
+    
                 }).catch(function (error) {
                     console.error(error);
                     reject(res.status(500).send("Error 500"));
                 })
-
+    
             }
+    
+        } else {
+            resolve(res.status(400).send("Bad request"));
+        }
 
-        })
+    })
 
-    } else {
-        res.status(400).send("Bad request");
-    }
 });
 
-function getYoutubeDownloadUrl(id) {
+function makeAPIRequestWithRetries(url) {
     let max_attempts = 3;
     let which_key = Math.floor(Math.random() * rapidapi_api_keys.length);
 
     return new Promise(function (resolve, reject) {
         function attempt(att) {
-            fetch('https://yt-api.p.rapidapi.com/dl?id='+id+'&cgeo=US', {
+            fetch(url, {
                 method: 'GET',
                 headers: {
                     'x-rapidapi-key': rapidapi_api_keys[(which_key + att - 1) % rapidapi_api_keys.length],
@@ -138,22 +126,16 @@ function getYoutubeDownloadUrl(id) {
                 }
             })
                 .then(response => response.json())
-                .then(function (json) {
-                    let audio_url = json?.adaptiveFormats?.find(f => f.mimeType.includes("audio/mp4"))?.url;
-  
-                    if (audio_url) {
-                        resolve(audio_url);
-                    } else {
-                        failed("Failed to get download url");
-                    }
-                }).catch(function (error) {
+                .then(resolve).catch(function (error) {
                     console.error(error);
                     failed(error);
                 });
 
             function failed(error) {
                 if (att < max_attempts) {
-                    attempt(att + 1);
+                    setTimeout(function () {
+                        attempt(att + 1);
+                    }, 1000 * att);
                 } else {
                     reject(error);
                 }
@@ -161,4 +143,8 @@ function getYoutubeDownloadUrl(id) {
         }
         attempt(1);
     });
+}
+
+function replaceNonExtendedASCII(str) {
+    return str.replace(/[^\x00-\xFF]/g, '?');
 }
