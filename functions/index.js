@@ -139,11 +139,12 @@ function getYoutubeDownloadUrl(id) {
             })
                 .then(response => response.json())
                 .then(function (json) {
-                    let url = json?.formats?.[0]?.url;
-                    if (url) {
-                        resolve(url);
+                    let audio_url = json?.adaptiveFormats?.find(f => f.mimeType.includes("audio/mp4"))?.url;
+  
+                    if (audio_url) {
+                        resolve(audio_url);
                     } else {
-                        failed("No download url");
+                        failed("Failed to get download url");
                     }
                 }).catch(function (error) {
                     console.error(error);
