@@ -482,12 +482,18 @@ function audioLoop()
 			end
 			if playing_status == 1 and needs_next_chunk == 3 then
 				needs_next_chunk = 1
-				for _, speaker in ipairs(speakers) do
-					while not speaker.playAudio(buffer) do
-						needs_next_chunk = 2
-						break
+				local fn = {}
+				for i, speaker in ipairs(speakers) do 
+					fn[i] = function()
+						local name = peripheral.getName(speaker)
+						while not speaker.playAudio(buffer) do
+							repeat 
+								local _, spkName = os.pullEvent("speaker_audio_empty")
+							until spkName == name
+						end
 					end
 				end
+				parallel.waitForAll(table.unpack(fn))
 			end
 			if playing_status == 1 and needs_next_chunk == 1 then
 
@@ -522,18 +528,26 @@ function audioLoop()
 						end
 				
 						buffer = decoder(chunk)
-						for _, speaker in ipairs(speakers) do
-							while not speaker.playAudio(buffer) do
-								needs_next_chunk = 2
-								break
+						
+						local fn = {}
+						for i, speaker in ipairs(speakers) do 
+							fn[i] = function()
+								local name = peripheral.getName(speaker)
+								while not speaker.playAudio(buffer) do
+									repeat 
+										local _, spkName = os.pullEvent("speaker_audio_empty")
+									until spkName == name
+								end
 							end
 						end
-						if needs_next_chunk == 2 then
+						
+						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
+						if not ok then
+							needs_next_chunk = 2
 							break
 						end
 					end
 				end
-
 			end
 		end
 
