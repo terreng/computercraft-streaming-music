@@ -14,7 +14,7 @@ local clicked_result = nil
 local playing = false
 local queue = {}
 local now_playing = nil
-local looping = false
+local looping = 0
 
 local playing_id = nil
 local last_download_url = nil
@@ -32,7 +32,7 @@ local buffer
 
 local speakers = { peripheral.find("speaker") }
 if #speakers == 0 then
-    error("No speakers attached. You need to connect a speaker to this computer. If this is an Advanced Noisy Pocket Computer, then this is a bug, and you should try restarting your Minecraft game.", 0)
+	error("No speakers attached. You need to connect a speaker to this computer. If this is an Advanced Noisy Pocket Computer, then this is a bug, and you should try restarting your Minecraft game.", 0)
 end
 
 function redrawScreen()
@@ -125,18 +125,24 @@ function drawNowPlaying()
 		term.setTextColor(colors.lightGray)
 		term.setBackgroundColor(colors.gray)
 	end
-	term.setCursorPos(2 + 8, 6)
+	term.setCursorPos(2 + 7, 6)
 	term.write(" Skip ")
 
-	if looping then
+	if looping ~= 0 then
 		term.setTextColor(colors.black)
 		term.setBackgroundColor(colors.white)
 	else
 		term.setTextColor(colors.white)
 		term.setBackgroundColor(colors.gray)
 	end
-	term.setCursorPos(2 + 8 + 8, 6)
-	term.write(" Loop ")
+	term.setCursorPos(2 + 7 + 7, 6)
+	if looping == 0 then
+		term.write(" Loop Off ")
+	elseif looping == 1 then
+		term.write(" Loop Queue ")
+	else
+		term.write(" Loop Song ")
+	end
 
 	if #queue > 0 then
 		term.setBackgroundColor(colors.black)
@@ -384,7 +390,7 @@ function uiLoop()
 
 					if y == 6 then
 						-- Play/stop button
-						if x >= 2 and x <= 2 + 6 then
+						if x >= 2 and x < 2 + 6 then
 							if playing or now_playing ~= nil or #queue > 0 then
 								term.setBackgroundColor(colors.white)
 								term.setTextColor(colors.black)
@@ -418,11 +424,11 @@ function uiLoop()
 						end
 
 						-- Skip button
-						if x >= 2 + 8 and x <= 2 + 8 + 6 then
+						if x >= 2 + 7 and x < 2 + 7 + 6 then
 							if now_playing ~= nil or #queue > 0 then
 								term.setBackgroundColor(colors.white)
 								term.setTextColor(colors.black)
-								term.setCursorPos(2 + 8, 6)
+								term.setCursorPos(2 + 7, 6)
 								term.write(" Skip ")
 								sleep(0.2)
 
@@ -447,11 +453,13 @@ function uiLoop()
 						end
 
 						-- Loop button
-						if x >= 2 + 8 + 8 and x <= 2 + 8 + 8 + 6 then
-							if looping then
-								looping = false
+						if x >= 2 + 7 + 7 and x < 2 + 7 + 7 + 12 then
+							if looping == 0 then
+								looping = 1
+							elseif looping == 1 then
+								looping = 2
 							else
-								looping = true
+								looping = 0
 							end
 						end
 						redrawScreen()
@@ -467,78 +475,97 @@ os.startTimer(1)
 function audioLoop()
 	while true do
 
-        -- AUDIO
-        if playing and now_playing then
-            if playing_id ~= now_playing.id then
-                playing_id = now_playing.id
-                last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
-                playing_status = 0
-                needs_next_chunk = 1
+		-- AUDIO
+		if playing and now_playing then
+			if playing_id ~= now_playing.id then
+				playing_id = now_playing.id
+				last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
+				playing_status = 0
+				needs_next_chunk = 1
 
-                http.request({url = last_download_url, binary = true})
+				http.request({url = last_download_url, binary = true})
 				is_loading = true
 
-                redrawScreen()
-            end
-            if playing_status == 1 and needs_next_chunk == 3 then
-                needs_next_chunk = 1
-                for _, speaker in ipairs(speakers) do
-                    while not speaker.playAudio(buffer) do
-                        needs_next_chunk = 2
-                        break
-                    end
-                end
-            end
-            if playing_status == 1 and needs_next_chunk == 1 then
+				redrawScreen()
+			end
+			if playing_status == 1 and needs_next_chunk == 3 then
+				needs_next_chunk = 1
+				local fn = {}
+				for i, speaker in ipairs(speakers) do 
+					fn[i] = function()
+						local name = peripheral.getName(speaker)
+						while not speaker.playAudio(buffer) do
+							repeat 
+								local _, spkName = os.pullEvent("speaker_audio_empty")
+							until spkName == name
+						end
+					end
+				end
+				parallel.waitForAll(table.unpack(fn))
+			end
+			if playing_status == 1 and needs_next_chunk == 1 then
 
-                while true do
-                    local chunk = player_handle.read(size)
-                    if not chunk then
-                        if looping then
-                            playing_id = nil
-                        else
-                            if #queue > 0 then
-                                now_playing = queue[1]
-                                table.remove(queue, 1)
-                                playing_id = nil
-                            else
-                                now_playing = nil
-                                playing = false
-                                playing_id = nil
-                                is_loading = false
-                                is_error = false
-                            end
-                        end
+				while true do
+					local chunk = player_handle.read(size)
+					if not chunk then
+						if looping == 2 or (looping == 1 and #queue == 0) then
+							playing_id = nil
+						elseif looping == 1 and #queue > 0 then
+							table.insert(queue, now_playing)
+							now_playing = queue[1]
+							table.remove(queue, 1)
+							playing_id = nil
+						else
+							if #queue > 0 then
+								now_playing = queue[1]
+								table.remove(queue, 1)
+								playing_id = nil
+							else
+								now_playing = nil
+								playing = false
+								playing_id = nil
+								is_loading = false
+								is_error = false
+							end
+						end
 
-                        redrawScreen()
+						redrawScreen()
 
-                        player_handle.close()
-                        needs_next_chunk = 0
-                        break
-                    else
-                        if start then
-                            chunk, start = start .. chunk, nil
-                            size = size + 4
-                        end
-                
-                        buffer = decoder(chunk)
-                        for _, speaker in ipairs(speakers) do
-                            while not speaker.playAudio(buffer) do
-                                needs_next_chunk = 2
-                                break
-                            end
-                        end
-                        if needs_next_chunk == 2 then
-                            break
-                        end
-                    end
-                end
-
-            end
-        end
+						player_handle.close()
+						needs_next_chunk = 0
+						break
+					else
+						if start then
+							chunk, start = start .. chunk, nil
+							size = size + 4
+						end
+				
+						buffer = decoder(chunk)
+						
+						local fn = {}
+						for i, speaker in ipairs(speakers) do 
+							fn[i] = function()
+								local name = peripheral.getName(speaker)
+								while not speaker.playAudio(buffer) do
+									repeat 
+										local _, spkName = os.pullEvent("speaker_audio_empty")
+									until spkName == name
+								end
+							end
+						end
+						
+						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
+						if not ok then
+							needs_next_chunk = 2
+							break
+						end
+					end
+				end
+			end
+		end
 
 		-- EVENTS
-        local event, param1, param2, param3 = os.pullEvent()	
+		local event, param1, param2, param3 = os.pullEvent()	
 
 		-- HTTP EVENTS
 		if event == "http_success" then
@@ -580,14 +607,14 @@ function audioLoop()
 		end
 
 		if event == "speaker_audio_empty" then
-            if needs_next_chunk == 2 then
-                needs_next_chunk = 3
-            end
-        end
+			if needs_next_chunk == 2 then
+				needs_next_chunk = 3
+			end
+		end
 
 		if event == "timer" then
-            os.startTimer(1)
-        end
+			os.startTimer(1)
+		end
 
 	end
 end
