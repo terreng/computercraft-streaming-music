@@ -65,10 +65,10 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
     
             // If you paste in a youtube link into the search box, get the video id and look it up directly
     
-            let youtube_url_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/);
-            if (youtube_url_match?.[5]?.length == 11) {
+            let youtube_id_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/)?.[5];
+            if (youtube_id_match?.length == 11) {
     
-                makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/video/info?id='+youtube_url_match[5]).then(function (item) {
+                makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/video/info?id='+youtube_id_match).then(function (item) {
     
                     resolve(res.status(200).send(JSON.stringify(item.error ? [] :[{
                         id: item.videoId,
@@ -82,25 +82,55 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                 })
     
             } else {
-    
-                // Otherwise, search for the song
-    
-                makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/search?query='+encodeURIComponent(req.query.search.split("+").join(" "))+'&type=video').then(function (json) {
-    
-                    resolve(res.status(200).send(JSON.stringify(json.data
-                        .filter(item => ["video"].includes(item.type))
-                        .map(function (item) {
-                            return {
-                                id: item.videoId,
-                                name: replaceNonExtendedASCII(item.title),
-                                artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
-                            }
-                    }))))
-    
-                }).catch(function (error) {
-                    console.error(error);
-                    reject(res.status(500).send("Error 500"));
-                })
+
+                // If you paste in a youtube playlist link into the search box, get the playlist id and look it up directly
+
+                let youtube_playlist_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))\/playlist(\S+)list=([\w\-]+)(\S+)?$/)?.[5];
+                if (youtube_playlist_match?.length == 34 && req.query.v >= 2) {
+
+                    makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/playlist?id='+youtube_playlist_match).then(function (item) {
+
+                        resolve(res.status(200).send(JSON.stringify((item.error || item.data?.length === 0) ? [] :[{
+                            id: item.meta.playlistId,
+                            name: replaceNonExtendedASCII(item.meta.title),
+                            artist: "Playlist - " + replaceNonExtendedASCII(item.meta.channelTitle),
+                            type: "playlist",
+                            playlist_items: item.data.map(function (item) {
+                                return {
+                                    id: item.videoId,
+                                    name: replaceNonExtendedASCII(item.title),
+                                    artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
+                                }
+                            })
+                        }])));
+
+                    }).catch(function (error) {
+                        console.error(error);
+                        reject(res.status(500).send("Error 500"));
+                    })
+
+                } else {
+
+                    // Otherwise, search for the song
+        
+                    makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/search?query='+encodeURIComponent(req.query.search.split("+").join(" "))+'&type=video').then(function (json) {
+        
+                        resolve(res.status(200).send(JSON.stringify(json.data
+                            .filter(item => ["video"].includes(item.type))
+                            .map(function (item) {
+                                return {
+                                    id: item.videoId,
+                                    name: replaceNonExtendedASCII(item.title),
+                                    artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
+                                }
+                        }))))
+        
+                    }).catch(function (error) {
+                        console.error(error);
+                        reject(res.status(500).send("Error 500"));
+                    })
+
+                }
     
             }
     
