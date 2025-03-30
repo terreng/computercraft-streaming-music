@@ -32,7 +32,7 @@ local buffer
 
 local speakers = { peripheral.find("speaker") }
 if #speakers == 0 then
-    error("No speakers attached. You need to connect a speaker to this computer. If this is an Advanced Noisy Pocket Computer, then this is a bug, and you should try restarting your Minecraft game.", 0)
+	error("No speakers attached. You need to connect a speaker to this computer. If this is an Advanced Noisy Pocket Computer, then this is a bug, and you should try restarting your Minecraft game.", 0)
 end
 
 function redrawScreen()
@@ -467,78 +467,78 @@ os.startTimer(1)
 function audioLoop()
 	while true do
 
-        -- AUDIO
-        if playing and now_playing then
-            if playing_id ~= now_playing.id then
-                playing_id = now_playing.id
-                last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
-                playing_status = 0
-                needs_next_chunk = 1
+		-- AUDIO
+		if playing and now_playing then
+			if playing_id ~= now_playing.id then
+				playing_id = now_playing.id
+				last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
+				playing_status = 0
+				needs_next_chunk = 1
 
-                http.request({url = last_download_url, binary = true})
+				http.request({url = last_download_url, binary = true})
 				is_loading = true
 
-                redrawScreen()
-            end
-            if playing_status == 1 and needs_next_chunk == 3 then
-                needs_next_chunk = 1
-                for _, speaker in ipairs(speakers) do
-                    while not speaker.playAudio(buffer) do
-                        needs_next_chunk = 2
-                        break
-                    end
-                end
-            end
-            if playing_status == 1 and needs_next_chunk == 1 then
+				redrawScreen()
+			end
+			if playing_status == 1 and needs_next_chunk == 3 then
+				needs_next_chunk = 1
+				for _, speaker in ipairs(speakers) do
+					while not speaker.playAudio(buffer) do
+						needs_next_chunk = 2
+						break
+					end
+				end
+			end
+			if playing_status == 1 and needs_next_chunk == 1 then
 
-                while true do
-                    local chunk = player_handle.read(size)
-                    if not chunk then
-                        if looping then
-                            playing_id = nil
-                        else
-                            if #queue > 0 then
-                                now_playing = queue[1]
-                                table.remove(queue, 1)
-                                playing_id = nil
-                            else
-                                now_playing = nil
-                                playing = false
-                                playing_id = nil
-                                is_loading = false
-                                is_error = false
-                            end
-                        end
+				while true do
+					local chunk = player_handle.read(size)
+					if not chunk then
+						if looping then
+							playing_id = nil
+						else
+							if #queue > 0 then
+								now_playing = queue[1]
+								table.remove(queue, 1)
+								playing_id = nil
+							else
+								now_playing = nil
+								playing = false
+								playing_id = nil
+								is_loading = false
+								is_error = false
+							end
+						end
 
-                        redrawScreen()
+						redrawScreen()
 
-                        player_handle.close()
-                        needs_next_chunk = 0
-                        break
-                    else
-                        if start then
-                            chunk, start = start .. chunk, nil
-                            size = size + 4
-                        end
-                
-                        buffer = decoder(chunk)
-                        for _, speaker in ipairs(speakers) do
-                            while not speaker.playAudio(buffer) do
-                                needs_next_chunk = 2
-                                break
-                            end
-                        end
-                        if needs_next_chunk == 2 then
-                            break
-                        end
-                    end
-                end
+						player_handle.close()
+						needs_next_chunk = 0
+						break
+					else
+						if start then
+							chunk, start = start .. chunk, nil
+							size = size + 4
+						end
+				
+						buffer = decoder(chunk)
+						for _, speaker in ipairs(speakers) do
+							while not speaker.playAudio(buffer) do
+								needs_next_chunk = 2
+								break
+							end
+						end
+						if needs_next_chunk == 2 then
+							break
+						end
+					end
+				end
 
-            end
-        end
+			end
+		end
 
 		-- EVENTS
-        local event, param1, param2, param3 = os.pullEvent()	
+		local event, param1, param2, param3 = os.pullEvent()	
 
 		-- HTTP EVENTS
 		if event == "http_success" then
@@ -580,14 +580,14 @@ function audioLoop()
 		end
 
 		if event == "speaker_audio_empty" then
-            if needs_next_chunk == 2 then
-                needs_next_chunk = 3
-            end
-        end
+			if needs_next_chunk == 2 then
+				needs_next_chunk = 3
+			end
+		end
 
 		if event == "timer" then
-            os.startTimer(1)
-        end
+			os.startTimer(1)
+		end
 
 	end
 end
