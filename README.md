@@ -1,6 +1,6 @@
 # Streaming music in Minecraft (ComputerCraft CC: Tweaked mod)
 
-**Version:** 2
+**Version:** 2.0
 
 **Install:** `pastebin get dPZKn1q5 music`
 
