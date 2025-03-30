@@ -1,4 +1,5 @@
 local api_base_url = "https://ipod-2to6magyna-uc.a.run.app/"
+local version = "2.1"
 
 local width, height = term.getSize()
 local tab = 1
@@ -242,7 +243,7 @@ function uiLoop()
 
 					if string.len(input) > 0 then
 						last_search = input
-						last_search_url = api_base_url .. "?v=2&search=" .. textutils.urlEncode(input)
+						last_search_url = api_base_url .. "?v=" .. version .. "&search=" .. textutils.urlEncode(input)
 						http.request(last_search_url)
 						search_results = nil
 						search_error = false
@@ -342,6 +343,7 @@ function uiLoop()
 								else
 									now_playing = search_results[clicked_result]
 								end
+								os.queueEvent("audio_update")
 							end
 		
 							if y == 8 then
@@ -357,6 +359,7 @@ function uiLoop()
 								else
 									table.insert(queue, 1, search_results[clicked_result])
 								end
+								os.queueEvent("audio_update")
 							end
 		
 							if y == 10 then
@@ -372,6 +375,7 @@ function uiLoop()
 								else
 									table.insert(queue, search_results[clicked_result])
 								end
+								os.queueEvent("audio_update")
 							end
 		
 							if y == 13 then
@@ -408,16 +412,19 @@ function uiLoop()
 										playing_id = nil
 										is_loading = false
 										is_error = false
+										os.queueEvent("audio_update")
 									elseif now_playing ~= nil then
 										playing_id = nil
 										playing = true
 										is_error = false
+										os.queueEvent("audio_update")
 									elseif #queue > 0 then
 										now_playing = queue[1]
 										table.remove(queue, 1)
 										playing_id = nil
 										playing = true
 										is_error = false
+										os.queueEvent("audio_update")
 									end
 								end
 		
@@ -440,6 +447,9 @@ function uiLoop()
 											now_playing = queue[1]
 											table.remove(queue, 1)
 											playing_id = nil
+											if looping == 1 then
+												table.insert(queue, now_playing)
+											end
 										else
 											now_playing = nil
 											playing = false
@@ -447,6 +457,7 @@ function uiLoop()
 											is_error = false
 											playing_id = nil
 										end
+										os.queueEvent("audio_update")
 									end
 								end
 		
@@ -475,40 +486,64 @@ function uiLoop()
 	end
 end
 
-os.startTimer(1)
-
 function audioLoop()
 	while true do
 
 		-- AUDIO
 		if playing and now_playing then
-			if playing_id ~= now_playing.id then
-				playing_id = now_playing.id
-				last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
+			local thisnowplayingid = now_playing.id
+			if playing_id ~= thisnowplayingid then
+				playing_id = thisnowplayingid
+				last_download_url = api_base_url .. "?v=" .. version .. "&id=" .. textutils.urlEncode(playing_id)
 				playing_status = 0
 				needs_next_chunk = 1
 
 				http.request({url = last_download_url, binary = true})
 				is_loading = true
 
-				redrawScreen()
-			end
-			if playing_status == 1 and needs_next_chunk == 3 then
+				os.queueEvent("redraw_screen")
+				os.queueEvent("audio_update")
+			elseif playing_status == 1 and needs_next_chunk == 3 then
 				needs_next_chunk = 1
 				local fn = {}
 				for i, speaker in ipairs(speakers) do 
 					fn[i] = function()
 						local name = peripheral.getName(speaker)
 						while not speaker.playAudio(buffer) do
-							repeat 
-								local _, spkName = os.pullEvent("speaker_audio_empty")
-							until spkName == name
+							local event_timer = os.startTimer(0.5)
+							
+							parallel.waitForAny(
+								function() 
+									repeat
+										local _, spkName = os.pullEvent("speaker_audio_empty")
+									until spkName == name
+								end,
+								function()
+									local _, timer_id = os.pullEvent("timer")
+									if timer_id == event_timer then
+										-- Timeout occurred, break the loop
+										return
+									end
+								end,
+								function()
+									local _, spkName = os.pullEvent("speaker_audio_stopped")
+									if spkName == name then
+										-- Playback was stopped, break out
+										return
+									end
+								end
+							)
+							
+							-- If we're not playing anymore, exit
+							if not playing or playing_id ~= thisnowplayingid then
+								return
+							end
 						end
 					end
 				end
 				parallel.waitForAll(table.unpack(fn))
-			end
-			if playing_status == 1 and needs_next_chunk == 1 then
+				os.queueEvent("audio_update")
+			elseif playing_status == 1 and needs_next_chunk == 1 then
 
 				while true do
 					local chunk = player_handle.read(size)
@@ -534,7 +569,7 @@ function audioLoop()
 							end
 						end
 
-						redrawScreen()
+						os.queueEvent("redraw_screen")
 
 						player_handle.close()
 						needs_next_chunk = 0
@@ -552,9 +587,34 @@ function audioLoop()
 							fn[i] = function()
 								local name = peripheral.getName(speaker)
 								while not speaker.playAudio(buffer) do
-									repeat 
-										local _, spkName = os.pullEvent("speaker_audio_empty")
-									until spkName == name
+									local event_timer = os.startTimer(0.5)
+									
+									parallel.waitForAny(
+										function() 
+											repeat
+												local _, spkName = os.pullEvent("speaker_audio_empty")
+											until spkName == name
+										end,
+										function()
+											local _, timer_id = os.pullEvent("timer")
+											if timer_id == event_timer then
+												-- Timeout occurred, break the loop
+												return
+											end
+										end,
+										function()
+											local _, spkName = os.pullEvent("speaker_audio_stopped")
+											if spkName == name then
+												-- Playback was stopped, break out
+												return
+											end
+										end
+									)
+									
+									-- If we're not playing anymore, exit
+									if not playing or playing_id ~= thisnowplayingid then
+										return
+									end
 								end
 							end
 						end
@@ -564,18 +624,30 @@ function audioLoop()
 							needs_next_chunk = 2
 							break
 						end
+						
+						-- If we're not playing anymore, exit the chunk processing loop
+						if not playing or playing_id ~= thisnowplayingid then
+							break
+						end
 					end
 				end
+				os.queueEvent("audio_update")
 			end
 		end
 
+		os.pullEvent("audio_update")
+	end
+end
+
+function httpLoop()
+	while true do
 		parallel.waitForAny(
 			function()
 				local event, url, handle = os.pullEvent("http_success")
 
 				if url == last_search_url then
 					search_results = textutils.unserialiseJSON(handle.readAll())
-					redrawScreen()
+					os.queueEvent("redraw_screen")
 				end
 				if url == last_download_url then
 					is_loading = false
@@ -587,7 +659,8 @@ function audioLoop()
 					end
 					playing_status = 1
 					decoder = require "cc.audio.dfpwm".make_decoder()
-					redrawScreen()
+					os.queueEvent("redraw_screen")
+					os.queueEvent("audio_update")
 				end
 			end,
 			function()
@@ -595,23 +668,19 @@ function audioLoop()
 
 				if url == last_search_url then
 					search_error = true
-					redrawScreen()
+					os.queueEvent("redraw_screen")
 				end
 				if url == last_download_url then
 					is_loading = false
 					is_error = true
 					playing = false
 					playing_id = nil
-					redrawScreen()
+					os.queueEvent("redraw_screen")
+					os.queueEvent("audio_update")
 				end
-			end,
-			function()
-				local event = os.pullEvent("timer")
-
-				os.startTimer(1)
 			end
 		)
 	end
 end
 
-parallel.waitForAny(uiLoop, audioLoop)
+parallel.waitForAny(uiLoop, audioLoop, httpLoop)
