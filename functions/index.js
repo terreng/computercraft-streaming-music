@@ -176,5 +176,13 @@ function makeAPIRequestWithRetries(url) {
 }
 
 function replaceNonExtendedASCII(str) {
-    return str.replace(/[^\x00-\xFF]/g, '?');
+    return str
+    .replace(/—/g, '-')
+    .replace(/–/g, '-')
+    .replace(/‘/g, "'")
+    .replace(/’/g, "'")
+    .replace(/“/g, '"')
+    .replace(/”/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[^\x00-\xFF]/g, '?');
 }
