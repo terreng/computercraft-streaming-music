@@ -71,7 +71,7 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                 makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/video/info?id='+youtube_id_match).then(function (item) {
     
                     resolve(res.status(200).send(JSON.stringify(item.error ? [] :[{
-                        id: item.videoId,
+                        id: item.id,
                         name: replaceNonExtendedASCII(item.title),
                         artist: replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
                     }])));
