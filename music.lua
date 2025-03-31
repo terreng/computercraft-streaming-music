@@ -1,4 +1,5 @@
 local api_base_url = "https://ipod-2to6magyna-uc.a.run.app/"
+local version = "2.1"
 
 local width, height = term.getSize()
 local tab = 1
@@ -14,7 +15,7 @@ local clicked_result = nil
 local playing = false
 local queue = {}
 local now_playing = nil
-local looping = false
+local looping = 0
 
 local playing_id = nil
 local last_download_url = nil
@@ -125,18 +126,24 @@ function drawNowPlaying()
 		term.setTextColor(colors.lightGray)
 		term.setBackgroundColor(colors.gray)
 	end
-	term.setCursorPos(2 + 8, 6)
+	term.setCursorPos(2 + 7, 6)
 	term.write(" Skip ")
 
-	if looping then
+	if looping ~= 0 then
 		term.setTextColor(colors.black)
 		term.setBackgroundColor(colors.white)
 	else
 		term.setTextColor(colors.white)
 		term.setBackgroundColor(colors.gray)
 	end
-	term.setCursorPos(2 + 8 + 8, 6)
-	term.write(" Loop ")
+	term.setCursorPos(2 + 7 + 7, 6)
+	if looping == 0 then
+		term.write(" Loop Off ")
+	elseif looping == 1 then
+		term.write(" Loop Queue ")
+	else
+		term.write(" Loop Song ")
+	end
 
 	if #queue > 0 then
 		term.setBackgroundColor(colors.black)
@@ -149,10 +156,6 @@ function drawNowPlaying()
 			term.write(queue[i].artist)
 		end
 	end
-end
-
-function drawDownloads()
-
 end
 
 function drawSearch()
@@ -236,7 +239,7 @@ function uiLoop()
 
 					if string.len(input) > 0 then
 						last_search = input
-						last_search_url = api_base_url .. "?v=2&search=" .. textutils.urlEncode(input)
+						last_search_url = api_base_url .. "?v=" .. version .. "&search=" .. textutils.urlEncode(input)
 						http.request(last_search_url)
 						search_results = nil
 						search_error = false
@@ -248,259 +251,268 @@ function uiLoop()
 					end
 
 					waiting_for_input = false
-					os.queueEvent("search_complete")
+					os.queueEvent("redraw_screen")
 				end,
 				function()
 					while waiting_for_input do
 						local event, button, x, y = os.pullEvent("mouse_click")
 						if y < 3 or y > 5 or x < 2 or x > width-1 then
 							waiting_for_input = false
-							os.queueEvent("search_complete")
+							os.queueEvent("redraw_screen")
 							break
 						end
 					end
 				end
 			)
 		else
-			local event, button, x, y = os.pullEvent()
-			
-			if event == "search_complete" then
-				redrawScreen()
-			end
-			
-			if event == "mouse_click" and button == 1 then
-				-- Tabs
-				if in_search_result == false then
-					if y == 1 then
-						if x < width/2 then
-							tab = 1
-						else
-							tab = 2
-						end
-						redrawScreen()
-					end
-				end
-				
-				if tab == 2 and in_search_result == false then
-					-- Search box click
-					if y >= 3 and y <= 5 and x >= 1 and x <= width-1 then
-						paintutils.drawFilledBox(2,3,width-1,5,colors.white)
-						term.setBackgroundColor(colors.white)
-						waiting_for_input = true
-					end
+			parallel.waitForAny(
+				function()
+					local event, button, x, y = os.pullEvent("mouse_click")
 
-					-- Search result click
-					if search_results then
-						for i=1,#search_results do
-							if y == 7 + (i-1)*2 or y == 8 + (i-1)*2 then
+					if button == 1 then
+						-- Tabs
+						if in_search_result == false then
+							if y == 1 then
+								if x < width/2 then
+									tab = 1
+								else
+									tab = 2
+								end
+								redrawScreen()
+							end
+						end
+						
+						if tab == 2 and in_search_result == false then
+							-- Search box click
+							if y >= 3 and y <= 5 and x >= 1 and x <= width-1 then
+								paintutils.drawFilledBox(2,3,width-1,5,colors.white)
 								term.setBackgroundColor(colors.white)
-								term.setTextColor(colors.black)
-								term.setCursorPos(2,7 + (i-1)*2)
+								waiting_for_input = true
+							end
+		
+							-- Search result click
+							if search_results then
+								for i=1,#search_results do
+									if y == 7 + (i-1)*2 or y == 8 + (i-1)*2 then
+										term.setBackgroundColor(colors.white)
+										term.setTextColor(colors.black)
+										term.setCursorPos(2,7 + (i-1)*2)
+										term.clearLine()
+										term.write(search_results[i].name)
+										term.setTextColor(colors.gray)
+										term.setCursorPos(2,8 + (i-1)*2)
+										term.clearLine()
+										term.write(search_results[i].artist)
+										sleep(0.2)
+										in_search_result = true
+										clicked_result = i
+										redrawScreen()
+									end
+								end
+							end
+						elseif tab == 2 and in_search_result == true then
+							-- Search result menu clicks
+		
+							term.setBackgroundColor(colors.white)
+							term.setTextColor(colors.black)
+		
+							if y == 6 then
+								term.setCursorPos(2,6)
 								term.clearLine()
-								term.write(search_results[i].name)
-								term.setTextColor(colors.gray)
-								term.setCursorPos(2,8 + (i-1)*2)
-								term.clearLine()
-								term.write(search_results[i].artist)
+								term.write("Play now")
 								sleep(0.2)
-								in_search_result = true
-								clicked_result = i
+								in_search_result = false
+								for _, speaker in ipairs(speakers) do
+									speaker.stop()
+									os.queueEvent("playback_stopped")
+								end
+								playing = true
+								is_error = false
+								playing_id = nil
+								if search_results[clicked_result].type == "playlist" then
+									now_playing = search_results[clicked_result].playlist_items[1]
+									queue = {}
+									if #search_results[clicked_result].playlist_items > 1 then
+										for i=2, #search_results[clicked_result].playlist_items do
+											table.insert(queue, search_results[clicked_result].playlist_items[i])
+										end
+									end
+								else
+									now_playing = search_results[clicked_result]
+								end
+								os.queueEvent("audio_update")
+							end
+		
+							if y == 8 then
+								term.setCursorPos(2,8)
+								term.clearLine()
+								term.write("Play next")
+								sleep(0.2)
+								in_search_result = false
+								if search_results[clicked_result].type == "playlist" then
+									for i = #search_results[clicked_result].playlist_items, 1, -1 do
+										table.insert(queue, 1, search_results[clicked_result].playlist_items[i])
+									end
+								else
+									table.insert(queue, 1, search_results[clicked_result])
+								end
+								os.queueEvent("audio_update")
+							end
+		
+							if y == 10 then
+								term.setCursorPos(2,10)
+								term.clearLine()
+								term.write("Add to queue")
+								sleep(0.2)
+								in_search_result = false
+								if search_results[clicked_result].type == "playlist" then
+									for i = 1, #search_results[clicked_result].playlist_items do
+										table.insert(queue, search_results[clicked_result].playlist_items[i])
+									end
+								else
+									table.insert(queue, search_results[clicked_result])
+								end
+								os.queueEvent("audio_update")
+							end
+		
+							if y == 13 then
+								term.setCursorPos(2,13)
+								term.clearLine()
+								term.write("Cancel")
+								sleep(0.2)
+								in_search_result = false
+							end
+		
+							redrawScreen()
+						elseif tab == 1 and in_search_result == false then
+							-- Now playing tab clicks
+		
+							if y == 6 then
+								-- Play/stop button
+								if x >= 2 and x < 2 + 6 then
+									if playing or now_playing ~= nil or #queue > 0 then
+										term.setBackgroundColor(colors.white)
+										term.setTextColor(colors.black)
+										term.setCursorPos(2, 6)
+										if playing then
+											term.write(" Stop ")
+										else 
+											term.write(" Play ")
+										end
+										sleep(0.2)
+									end
+									if playing then
+										playing = false
+										for _, speaker in ipairs(speakers) do
+											speaker.stop()
+											os.queueEvent("playback_stopped")
+										end
+										playing_id = nil
+										is_loading = false
+										is_error = false
+										os.queueEvent("audio_update")
+									elseif now_playing ~= nil then
+										playing_id = nil
+										playing = true
+										is_error = false
+										os.queueEvent("audio_update")
+									elseif #queue > 0 then
+										now_playing = queue[1]
+										table.remove(queue, 1)
+										playing_id = nil
+										playing = true
+										is_error = false
+										os.queueEvent("audio_update")
+									end
+								end
+		
+								-- Skip button
+								if x >= 2 + 7 and x < 2 + 7 + 6 then
+									if now_playing ~= nil or #queue > 0 then
+										term.setBackgroundColor(colors.white)
+										term.setTextColor(colors.black)
+										term.setCursorPos(2 + 7, 6)
+										term.write(" Skip ")
+										sleep(0.2)
+		
+										is_error = false
+										if playing then
+											for _, speaker in ipairs(speakers) do
+												speaker.stop()
+												os.queueEvent("playback_stopped")
+											end
+										end
+										if #queue > 0 then
+											if looping == 1 then
+												table.insert(queue, now_playing)
+											end
+											now_playing = queue[1]
+											table.remove(queue, 1)
+											playing_id = nil
+										else
+											now_playing = nil
+											playing = false
+											is_loading = false
+											is_error = false
+											playing_id = nil
+										end
+										os.queueEvent("audio_update")
+									end
+								end
+		
+								-- Loop button
+								if x >= 2 + 7 + 7 and x < 2 + 7 + 7 + 12 then
+									if looping == 0 then
+										looping = 1
+									elseif looping == 1 then
+										looping = 2
+									else
+										looping = 0
+									end
+								end
 								redrawScreen()
 							end
 						end
 					end
-				elseif tab == 2 and in_search_result == true then
-					-- Search result menu clicks
-
-					term.setBackgroundColor(colors.white)
-					term.setTextColor(colors.black)
-
-					if y == 6 then
-						term.setCursorPos(2,6)
-						term.clearLine()
-						term.write("Play now")
-						sleep(0.2)
-						in_search_result = false
-						for _, speaker in ipairs(speakers) do
-							speaker.stop()
-						end
-						playing = true
-						is_error = false
-						playing_id = nil
-						if search_results[clicked_result].type == "playlist" then
-							now_playing = search_results[clicked_result].playlist_items[1]
-							queue = {}
-							if #search_results[clicked_result].playlist_items > 1 then
-								for i=2, #search_results[clicked_result].playlist_items do
-									table.insert(queue, search_results[clicked_result].playlist_items[i])
-								end
-							end
-						else
-							now_playing = search_results[clicked_result]
-						end
-					end
-
-					if y == 8 then
-						term.setCursorPos(2,8)
-						term.clearLine()
-						term.write("Play next")
-						sleep(0.2)
-						in_search_result = false
-						if search_results[clicked_result].type == "playlist" then
-							for i = #search_results[clicked_result].playlist_items, 1, -1 do
-								table.insert(queue, 1, search_results[clicked_result].playlist_items[i])
-							end
-						else
-							table.insert(queue, 1, search_results[clicked_result])
-						end
-					end
-
-					if y == 10 then
-						term.setCursorPos(2,10)
-						term.clearLine()
-						term.write("Add to queue")
-						sleep(0.2)
-						in_search_result = false
-						if search_results[clicked_result].type == "playlist" then
-							for i = 1, #search_results[clicked_result].playlist_items do
-								table.insert(queue, search_results[clicked_result].playlist_items[i])
-							end
-						else
-							table.insert(queue, search_results[clicked_result])
-						end
-					end
-
-					if y == 13 then
-						term.setCursorPos(2,13)
-						term.clearLine()
-						term.write("Cancel")
-						sleep(0.2)
-						in_search_result = false
-					end
+				end,
+				function()
+					local event = os.pullEvent("redraw_screen")
 
 					redrawScreen()
-				elseif tab == 1 and in_search_result == false then
-					-- Now playing tab clicks
-
-					if y == 6 then
-						-- Play/stop button
-						if x >= 2 and x <= 2 + 6 then
-							if playing or now_playing ~= nil or #queue > 0 then
-								term.setBackgroundColor(colors.white)
-								term.setTextColor(colors.black)
-								term.setCursorPos(2, 6)
-								if playing then
-									term.write(" Stop ")
-								else 
-									term.write(" Play ")
-								end
-								sleep(0.2)
-							end
-							if playing then
-								playing = false
-								for _, speaker in ipairs(speakers) do
-									speaker.stop()
-								end
-								playing_id = nil
-								is_loading = false
-								is_error = false
-							elseif now_playing ~= nil then
-								playing_id = nil
-								playing = true
-								is_error = false
-							elseif #queue > 0 then
-								now_playing = queue[1]
-								table.remove(queue, 1)
-								playing_id = nil
-								playing = true
-								is_error = false
-							end
-						end
-
-						-- Skip button
-						if x >= 2 + 8 and x <= 2 + 8 + 6 then
-							if now_playing ~= nil or #queue > 0 then
-								term.setBackgroundColor(colors.white)
-								term.setTextColor(colors.black)
-								term.setCursorPos(2 + 8, 6)
-								term.write(" Skip ")
-								sleep(0.2)
-
-								is_error = false
-								if playing then
-									for _, speaker in ipairs(speakers) do
-										speaker.stop()
-									end
-								end
-								if #queue > 0 then
-									now_playing = queue[1]
-									table.remove(queue, 1)
-									playing_id = nil
-								else
-									now_playing = nil
-									playing = false
-									is_loading = false
-									is_error = false
-									playing_id = nil
-								end
-							end
-						end
-
-						-- Loop button
-						if x >= 2 + 8 + 8 and x <= 2 + 8 + 8 + 6 then
-							if looping then
-								looping = false
-							else
-								looping = true
-							end
-						end
-						redrawScreen()
-					end
 				end
-			end
+			)
 		end
 	end
 end
-
-os.startTimer(1)
 
 function audioLoop()
 	while true do
 
 		-- AUDIO
 		if playing and now_playing then
-			if playing_id ~= now_playing.id then
-				playing_id = now_playing.id
-				last_download_url = api_base_url .. "?v=2&id=" .. textutils.urlEncode(playing_id)
+			local thisnowplayingid = now_playing.id
+			if playing_id ~= thisnowplayingid then
+				playing_id = thisnowplayingid
+				last_download_url = api_base_url .. "?v=" .. version .. "&id=" .. textutils.urlEncode(playing_id)
 				playing_status = 0
 				needs_next_chunk = 1
 
 				http.request({url = last_download_url, binary = true})
 				is_loading = true
 
-				redrawScreen()
-			end
-			if playing_status == 1 and needs_next_chunk == 3 then
-				needs_next_chunk = 1
-				local fn = {}
-				for i, speaker in ipairs(speakers) do 
-					fn[i] = function()
-						local name = peripheral.getName(speaker)
-						while not speaker.playAudio(buffer) do
-							repeat 
-								local _, spkName = os.pullEvent("speaker_audio_empty")
-							until spkName == name
-						end
-					end
-				end
-				parallel.waitForAll(table.unpack(fn))
-			end
-			if playing_status == 1 and needs_next_chunk == 1 then
+				os.queueEvent("redraw_screen")
+				os.queueEvent("audio_update")
+			elseif playing_status == 1 and needs_next_chunk == 1 then
 
 				while true do
 					local chunk = player_handle.read(size)
 					if not chunk then
-						if looping then
+						if looping == 2 or (looping == 1 and #queue == 0) then
+							playing_id = nil
+						elseif looping == 1 and #queue > 0 then
+							table.insert(queue, now_playing)
+							now_playing = queue[1]
+							table.remove(queue, 1)
 							playing_id = nil
 						else
 							if #queue > 0 then
@@ -516,7 +528,7 @@ function audioLoop()
 							end
 						end
 
-						redrawScreen()
+						os.queueEvent("redraw_screen")
 
 						player_handle.close()
 						needs_next_chunk = 0
@@ -533,10 +545,39 @@ function audioLoop()
 						for i, speaker in ipairs(speakers) do 
 							fn[i] = function()
 								local name = peripheral.getName(speaker)
-								while not speaker.playAudio(buffer) do
-									repeat 
-										local _, spkName = os.pullEvent("speaker_audio_empty")
-									until spkName == name
+								if #speakers > 1 then
+									if speaker.playAudio(buffer) then
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
+											return
+										end
+									end
+								else
+									while not speaker.playAudio(buffer) do
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
+											return
+										end
+									end
+								end
+								if not playing or playing_id ~= thisnowplayingid then
+									return
 								end
 							end
 						end
@@ -544,66 +585,66 @@ function audioLoop()
 						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
 						if not ok then
 							needs_next_chunk = 2
+							is_error = true
+							break
+						end
+						
+						-- If we're not playing anymore, exit the chunk processing loop
+						if not playing or playing_id ~= thisnowplayingid then
 							break
 						end
 					end
 				end
+				os.queueEvent("audio_update")
 			end
 		end
 
-		-- EVENTS
-		local event, param1, param2, param3 = os.pullEvent()	
-
-		-- HTTP EVENTS
-		if event == "http_success" then
-			local url = param1
-			local handle = param2
-
-			if url == last_search_url then
-				search_results = textutils.unserialiseJSON(handle.readAll())
-				redrawScreen()
-			end
-			if url == last_download_url then
-				is_loading = false
-				player_handle = handle
-				start = handle.read(4)
-				size = 16 * 1024 - 4
-				if start == "RIFF" then
-					error("WAV not supported!")
-				end
-				playing_status = 1
-				decoder = require "cc.audio.dfpwm".make_decoder()
-				redrawScreen()
-			end
-		end
-
-		if event == "http_failure" then
-			local url = param1
-
-			if url == last_search_url then
-				search_error = true
-				redrawScreen()
-			end
-			if url == last_download_url then
-				is_loading = false
-				is_error = true
-				playing = false
-				playing_id = nil
-				redrawScreen()
-			end
-		end
-
-		if event == "speaker_audio_empty" then
-			if needs_next_chunk == 2 then
-				needs_next_chunk = 3
-			end
-		end
-
-		if event == "timer" then
-			os.startTimer(1)
-		end
-
+		os.pullEvent("audio_update")
 	end
 end
 
-parallel.waitForAny(uiLoop, audioLoop)
+function httpLoop()
+	while true do
+		parallel.waitForAny(
+			function()
+				local event, url, handle = os.pullEvent("http_success")
+
+				if url == last_search_url then
+					search_results = textutils.unserialiseJSON(handle.readAll())
+					os.queueEvent("redraw_screen")
+				end
+				if url == last_download_url then
+					is_loading = false
+					player_handle = handle
+					start = handle.read(4)
+					size = 16 * 1024 - 4
+					if start == "RIFF" then
+						error("WAV not supported!")
+					end
+					playing_status = 1
+					decoder = require "cc.audio.dfpwm".make_decoder()
+					os.queueEvent("redraw_screen")
+					os.queueEvent("audio_update")
+				end
+			end,
+			function()
+				local event, url = os.pullEvent("http_failure")	
+
+				if url == last_search_url then
+					search_error = true
+					os.queueEvent("redraw_screen")
+				end
+				if url == last_download_url then
+					is_loading = false
+					is_error = true
+					playing = false
+					playing_id = nil
+					os.queueEvent("redraw_screen")
+					os.queueEvent("audio_update")
+				end
+			end
+		)
+	end
+end
+
+parallel.waitForAny(uiLoop, audioLoop, httpLoop)
