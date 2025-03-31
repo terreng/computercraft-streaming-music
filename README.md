@@ -1,8 +1,8 @@
 # Streaming music in Minecraft (ComputerCraft CC: Tweaked mod)
 
-**Version:** 2.0
+**Version:** 2.1
 
-**Install:** `pastebin get dPZKn1q5 music`
+**Install:** `pastebin get Rc1PCzLH music`
 
 To update from the original version, run `delete music` first.
 
