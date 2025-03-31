@@ -303,7 +303,7 @@ function uiLoop()
 										term.setCursorPos(2,8 + (i-1)*2)
 										term.clearLine()
 										term.write(search_results[i].artist)
-										-- sleep(0.2)
+										sleep(0.2)
 										in_search_result = true
 										clicked_result = i
 										redrawScreen()
@@ -320,7 +320,7 @@ function uiLoop()
 								term.setCursorPos(2,6)
 								term.clearLine()
 								term.write("Play now")
-								-- sleep(0.2)
+								sleep(0.2)
 								in_search_result = false
 								for _, speaker in ipairs(speakers) do
 									speaker.stop()
@@ -347,7 +347,7 @@ function uiLoop()
 								term.setCursorPos(2,8)
 								term.clearLine()
 								term.write("Play next")
-								-- sleep(0.2)
+								sleep(0.2)
 								in_search_result = false
 								if search_results[clicked_result].type == "playlist" then
 									for i = #search_results[clicked_result].playlist_items, 1, -1 do
@@ -363,7 +363,7 @@ function uiLoop()
 								term.setCursorPos(2,10)
 								term.clearLine()
 								term.write("Add to queue")
-								-- sleep(0.2)
+								sleep(0.2)
 								in_search_result = false
 								if search_results[clicked_result].type == "playlist" then
 									for i = 1, #search_results[clicked_result].playlist_items do
@@ -379,7 +379,7 @@ function uiLoop()
 								term.setCursorPos(2,13)
 								term.clearLine()
 								term.write("Cancel")
-								-- sleep(0.2)
+								sleep(0.2)
 								in_search_result = false
 							end
 		
@@ -399,7 +399,7 @@ function uiLoop()
 										else 
 											term.write(" Play ")
 										end
-										-- sleep(0.2)
+										sleep(0.2)
 									end
 									if playing then
 										playing = false
@@ -433,7 +433,7 @@ function uiLoop()
 										term.setTextColor(colors.black)
 										term.setCursorPos(2 + 7, 6)
 										term.write(" Skip ")
-										-- sleep(0.2)
+										sleep(0.2)
 		
 										is_error = false
 										if playing then
@@ -443,12 +443,12 @@ function uiLoop()
 											end
 										end
 										if #queue > 0 then
-											now_playing = queue[1]
-											table.remove(queue, 1)
-											playing_id = nil
 											if looping == 1 then
 												table.insert(queue, now_playing)
 											end
+											now_playing = queue[1]
+											table.remove(queue, 1)
+											playing_id = nil
 										else
 											now_playing = nil
 											playing = false
@@ -502,32 +502,6 @@ function audioLoop()
 
 				os.queueEvent("redraw_screen")
 				os.queueEvent("audio_update")
-			elseif playing_status == 1 and needs_next_chunk == 3 then
-				needs_next_chunk = 1
-				local fn = {}
-				for i, speaker in ipairs(speakers) do 
-					fn[i] = function()
-						local name = peripheral.getName(speaker)
-						while not speaker.playAudio(buffer) do
-							parallel.waitForAny(
-								function() 
-									local event = os.pullEvent("speaker_audio_empty")
-								end,
-								function()
-									local event = os.pullEvent("playback_stopped")
-									return
-								end
-							)
-							
-							-- If we're not playing anymore, exit
-							if not playing or playing_id ~= thisnowplayingid then
-								return
-							end
-						end
-					end
-				end
-				parallel.waitForAll(table.unpack(fn))
-				os.queueEvent("audio_update")
 			elseif playing_status == 1 and needs_next_chunk == 1 then
 
 				while true do
@@ -571,21 +545,39 @@ function audioLoop()
 						for i, speaker in ipairs(speakers) do 
 							fn[i] = function()
 								local name = peripheral.getName(speaker)
-								while not speaker.playAudio(buffer) do
-									parallel.waitForAny(
-										function() 
-											local event = os.pullEvent("speaker_audio_empty")
-										end,
-										function()
-											local event = os.pullEvent("playback_stopped")
+								if #speakers > 1 then
+									if speaker.playAudio(buffer) then
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
 											return
 										end
-									)
-									
-									-- If we're not playing anymore, exit
-									if not playing or playing_id ~= thisnowplayingid then
-										return
 									end
+								else
+									while not speaker.playAudio(buffer) do
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
+											return
+										end
+									end
+								end
+								if not playing or playing_id ~= thisnowplayingid then
+									return
 								end
 							end
 						end
@@ -593,6 +585,7 @@ function audioLoop()
 						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
 						if not ok then
 							needs_next_chunk = 2
+							is_error = true
 							break
 						end
 						
