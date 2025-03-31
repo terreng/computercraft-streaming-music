@@ -158,10 +158,6 @@ function drawNowPlaying()
 	end
 end
 
-function drawDownloads()
-
-end
-
 function drawSearch()
 	-- Search bar
 	paintutils.drawFilledBox(2,3,width-1,5,colors.lightGray)
@@ -307,7 +303,7 @@ function uiLoop()
 										term.setCursorPos(2,8 + (i-1)*2)
 										term.clearLine()
 										term.write(search_results[i].artist)
-										sleep(0.2)
+										-- sleep(0.2)
 										in_search_result = true
 										clicked_result = i
 										redrawScreen()
@@ -324,10 +320,11 @@ function uiLoop()
 								term.setCursorPos(2,6)
 								term.clearLine()
 								term.write("Play now")
-								sleep(0.2)
+								-- sleep(0.2)
 								in_search_result = false
 								for _, speaker in ipairs(speakers) do
 									speaker.stop()
+									os.queueEvent("playback_stopped")
 								end
 								playing = true
 								is_error = false
@@ -350,7 +347,7 @@ function uiLoop()
 								term.setCursorPos(2,8)
 								term.clearLine()
 								term.write("Play next")
-								sleep(0.2)
+								-- sleep(0.2)
 								in_search_result = false
 								if search_results[clicked_result].type == "playlist" then
 									for i = #search_results[clicked_result].playlist_items, 1, -1 do
@@ -366,7 +363,7 @@ function uiLoop()
 								term.setCursorPos(2,10)
 								term.clearLine()
 								term.write("Add to queue")
-								sleep(0.2)
+								-- sleep(0.2)
 								in_search_result = false
 								if search_results[clicked_result].type == "playlist" then
 									for i = 1, #search_results[clicked_result].playlist_items do
@@ -382,7 +379,7 @@ function uiLoop()
 								term.setCursorPos(2,13)
 								term.clearLine()
 								term.write("Cancel")
-								sleep(0.2)
+								-- sleep(0.2)
 								in_search_result = false
 							end
 		
@@ -402,12 +399,13 @@ function uiLoop()
 										else 
 											term.write(" Play ")
 										end
-										sleep(0.2)
+										-- sleep(0.2)
 									end
 									if playing then
 										playing = false
 										for _, speaker in ipairs(speakers) do
 											speaker.stop()
+											os.queueEvent("playback_stopped")
 										end
 										playing_id = nil
 										is_loading = false
@@ -435,12 +433,13 @@ function uiLoop()
 										term.setTextColor(colors.black)
 										term.setCursorPos(2 + 7, 6)
 										term.write(" Skip ")
-										sleep(0.2)
+										-- sleep(0.2)
 		
 										is_error = false
 										if playing then
 											for _, speaker in ipairs(speakers) do
 												speaker.stop()
+												os.queueEvent("playback_stopped")
 											end
 										end
 										if #queue > 0 then
@@ -510,27 +509,13 @@ function audioLoop()
 					fn[i] = function()
 						local name = peripheral.getName(speaker)
 						while not speaker.playAudio(buffer) do
-							local event_timer = os.startTimer(0.5)
-							
 							parallel.waitForAny(
 								function() 
-									repeat
-										local _, spkName = os.pullEvent("speaker_audio_empty")
-									until spkName == name
+									local event = os.pullEvent("speaker_audio_empty")
 								end,
 								function()
-									local _, timer_id = os.pullEvent("timer")
-									if timer_id == event_timer then
-										-- Timeout occurred, break the loop
-										return
-									end
-								end,
-								function()
-									local _, spkName = os.pullEvent("speaker_audio_stopped")
-									if spkName == name then
-										-- Playback was stopped, break out
-										return
-									end
+									local event = os.pullEvent("playback_stopped")
+									return
 								end
 							)
 							
@@ -587,27 +572,13 @@ function audioLoop()
 							fn[i] = function()
 								local name = peripheral.getName(speaker)
 								while not speaker.playAudio(buffer) do
-									local event_timer = os.startTimer(0.5)
-									
 									parallel.waitForAny(
 										function() 
-											repeat
-												local _, spkName = os.pullEvent("speaker_audio_empty")
-											until spkName == name
+											local event = os.pullEvent("speaker_audio_empty")
 										end,
 										function()
-											local _, timer_id = os.pullEvent("timer")
-											if timer_id == event_timer then
-												-- Timeout occurred, break the loop
-												return
-											end
-										end,
-										function()
-											local _, spkName = os.pullEvent("speaker_audio_stopped")
-											if spkName == name then
-												-- Playback was stopped, break out
-												return
-											end
+											local event = os.pullEvent("playback_stopped")
+											return
 										end
 									)
 									
