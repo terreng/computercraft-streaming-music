@@ -28,7 +28,7 @@ local player_handle = nil
 local start = nil
 local pcm = nil
 local size = nil
-local decoder = nil
+local decoder = require "cc.audio.dfpwm".make_decoder()
 local needs_next_chunk = 0
 local buffer
 
@@ -494,6 +494,13 @@ function uiLoop()
 								-- Volume slider
 								if x >= 1 and x < 2 + 24 then
 									volume = (x - 1) / 24 * 3
+
+									-- for _, speaker in ipairs(speakers) do
+									-- 	speaker.stop()
+									-- 	os.queueEvent("playback_stopped")
+									-- end
+									-- playing_id = nil
+									-- os.queueEvent("audio_update")
 								end
 							end
 
@@ -512,6 +519,13 @@ function uiLoop()
 								-- Volume slider
 								if x >= 1 and x < 2 + 24 then
 									volume = (x - 1) / 24 * 3
+
+									-- for _, speaker in ipairs(speakers) do
+									-- 	speaker.stop()
+									-- 	os.queueEvent("playback_stopped")
+									-- end
+									-- playing_id = nil
+									-- os.queueEvent("audio_update")
 								end
 							end
 
@@ -662,11 +676,7 @@ function httpLoop()
 					player_handle = handle
 					start = handle.read(4)
 					size = 16 * 1024 - 4
-					if start == "RIFF" then
-						error("WAV not supported!")
-					end
 					playing_status = 1
-					decoder = require "cc.audio.dfpwm".make_decoder()
 					os.queueEvent("redraw_screen")
 					os.queueEvent("audio_update")
 				end
