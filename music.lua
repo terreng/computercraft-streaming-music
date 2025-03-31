@@ -16,6 +16,7 @@ local playing = false
 local queue = {}
 local now_playing = nil
 local looping = 0
+local volume = 1.5
 
 local playing_id = nil
 local last_download_url = nil
@@ -27,7 +28,7 @@ local player_handle = nil
 local start = nil
 local pcm = nil
 local size = nil
-local decoder = nil
+local decoder = require "cc.audio.dfpwm".make_decoder()
 local needs_next_chunk = 0
 local buffer
 
@@ -145,14 +146,31 @@ function drawNowPlaying()
 		term.write(" Loop Song ")
 	end
 
+	term.setCursorPos(2,8)
+	paintutils.drawBox(2,8,25,8,colors.gray)
+	local width = math.floor(24 * (volume / 3) + 0.5)-1
+	if not (width == -1) then
+		paintutils.drawBox(2,8,2+width,8,colors.white)
+	end
+	if volume < 0.6 then
+		term.setCursorPos(2+width+2,8)
+		term.setBackgroundColor(colors.gray)
+		term.setTextColor(colors.white)
+	else
+		term.setCursorPos(2+width-3-(volume == 3 and 1 or 0),8)
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	term.write(math.floor(100 * (volume / 3) + 0.5) .. "%")
+
 	if #queue > 0 then
 		term.setBackgroundColor(colors.black)
 		for i=1,#queue do
 			term.setTextColor(colors.white)
-			term.setCursorPos(2,8 + (i-1)*2)
+			term.setCursorPos(2,10 + (i-1)*2)
 			term.write(queue[i].name)
 			term.setTextColor(colors.lightGray)
-			term.setCursorPos(2,9 + (i-1)*2)
+			term.setCursorPos(2,11 + (i-1)*2)
 			term.write(queue[i].artist)
 		end
 	end
@@ -470,8 +488,48 @@ function uiLoop()
 										looping = 0
 									end
 								end
-								redrawScreen()
 							end
+
+							if y == 8 then
+								-- Volume slider
+								if x >= 1 and x < 2 + 24 then
+									volume = (x - 1) / 24 * 3
+
+									-- for _, speaker in ipairs(speakers) do
+									-- 	speaker.stop()
+									-- 	os.queueEvent("playback_stopped")
+									-- end
+									-- playing_id = nil
+									-- os.queueEvent("audio_update")
+								end
+							end
+
+							redrawScreen()
+						end
+					end
+				end,
+				function()
+					local event, button, x, y = os.pullEvent("mouse_drag")
+
+					if button == 1 then
+
+						if tab == 1 and in_search_result == false then
+
+							if y >= 7 and y <= 9 then
+								-- Volume slider
+								if x >= 1 and x < 2 + 24 then
+									volume = (x - 1) / 24 * 3
+
+									-- for _, speaker in ipairs(speakers) do
+									-- 	speaker.stop()
+									-- 	os.queueEvent("playback_stopped")
+									-- end
+									-- playing_id = nil
+									-- os.queueEvent("audio_update")
+								end
+							end
+
+							redrawScreen()
 						end
 					end
 				end,
@@ -546,7 +604,7 @@ function audioLoop()
 							fn[i] = function()
 								local name = peripheral.getName(speaker)
 								if #speakers > 1 then
-									if speaker.playAudio(buffer) then
+									if speaker.playAudio(buffer, volume) then
 										parallel.waitForAny(
 											function()
 												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
@@ -561,7 +619,7 @@ function audioLoop()
 										end
 									end
 								else
-									while not speaker.playAudio(buffer) do
+									while not speaker.playAudio(buffer, volume) do
 										parallel.waitForAny(
 											function()
 												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
@@ -618,11 +676,7 @@ function httpLoop()
 					player_handle = handle
 					start = handle.read(4)
 					size = 16 * 1024 - 4
-					if start == "RIFF" then
-						error("WAV not supported!")
-					end
 					playing_status = 1
-					decoder = require "cc.audio.dfpwm".make_decoder()
 					os.queueEvent("redraw_screen")
 					os.queueEvent("audio_update")
 				end
