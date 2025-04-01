@@ -70,11 +70,12 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
     
                 makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/video/info?id='+youtube_id_match).then(function (item) {
     
-                    resolve(res.status(200).send(JSON.stringify(!item.title ? [] :[{
+                    res.setHeader('Content-Type', 'application/json; charset=latin1');
+                    resolve(res.status(200).send(Buffer.from(JSON.stringify(!item.title ? [] :[{
                         id: item.id,
                         name: replaceNonExtendedASCII(item.title),
                         artist: toHMS(Number(item.lengthSeconds)) + " · " + replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
-                    }])));
+                    }]), 'latin1')));
     
                 }).catch(function (error) {
                     console.error(error);
@@ -90,7 +91,8 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
 
                     makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/playlist?id='+youtube_playlist_match).then(function (item) {
 
-                        resolve(res.status(200).send(JSON.stringify((item.error || item.data?.length === 0) ? [] :[{
+                        res.setHeader('Content-Type', 'application/json; charset=latin1');
+                        resolve(res.status(200).send(Buffer.from(JSON.stringify((item.error || item.data?.length === 0) ? [] :[{
                             id: item.meta.playlistId,
                             name: replaceNonExtendedASCII(item.meta.title),
                             artist: "Playlist · " + item.meta.videoCount + " videos · " + replaceNonExtendedASCII(item.meta.channelTitle),
@@ -102,7 +104,7 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                                     artist: item.lengthText + " · " + replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
                                 }
                             })
-                        }])));
+                        }]), 'latin1')));
 
                     }).catch(function (error) {
                         console.error(error);
@@ -115,8 +117,9 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
         
                     makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/search?query='+encodeURIComponent(req.query.search.split("+").join(" "))+'&type=video').then(function (json) {
         
+                        res.setHeader('Content-Type', 'application/json; charset=latin1');
                         resolve(res.status(200).send(
-                            JSON.stringify(
+                            Buffer.from(JSON.stringify(
                                 json.data
                                 .filter(item => ["video"].includes(item.type))
                                 .map(function (item) {
@@ -126,7 +129,7 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                                         artist: item.lengthText + " · " + replaceNonExtendedASCII(item.channelTitle.split(" - Topic")[0])
                                     }
                                 })
-                            )
+                            ), 'latin1')
                         ))
         
                     }).catch(function (error) {
@@ -183,10 +186,10 @@ function replaceNonExtendedASCII(str) {
     return str
     .replace(/—/g, '-')
     .replace(/–/g, '-')
-    .replace(/'/g, "'")
-    .replace(/'/g, "'")
-    .replace(/"/g, '"')
-    .replace(/"/g, '"')
+    .replace(/‘/g, "'")
+    .replace(/’/g, "'")
+    .replace(/“/g, '"')
+    .replace(/”/g, '"')
     .replace(/…/g, '...')
     .replace(/•/g, '·')
     .replace(/[^\x00-\xFF]/g, '?');
