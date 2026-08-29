@@ -115,7 +115,7 @@ export const ipod = onRequest({ memory: "512MiB", maxInstances: 3 }, (req, res) 
                 // If you paste in a youtube playlist link into the search box, get the playlist id and look it up directly
 
                 let youtube_playlist_match = req.query.search.match(/((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))\/playlist(\S+)list=([\w\-]+)(\S+)?$/)?.[5];
-                if (youtube_playlist_match.length > 5 && Number(req.query.v || 0) >= 2) {
+                if (youtube_playlist_match?.length > 5 && Number(req.query.v || 0) >= 2) {
 
                     makeAPIRequestWithRetries('https://yt-api.p.rapidapi.com/playlist?id='+youtube_playlist_match).then(function (item) {
 
